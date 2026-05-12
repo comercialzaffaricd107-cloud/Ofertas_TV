@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cruzamento Ofertas TV × Pedidos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
+  
+  header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  header span { font-size: 13px; color: #aaa; margin-left: auto; }
+
+  .upload-zone { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 1.5rem 2rem; }
+  
+  .drop-card { background: #fff; border: 2px dashed #d0cfc8; border-radius: 12px; padding: 1.5rem; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; position: relative; }
+  .drop-card:hover, .drop-card.drag-over { border-color: #4a6cf7; background: #f0f3ff; }
+  .drop-card input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-card .icon { font-size: 2rem; margin-bottom: 8px; }
+  .drop-card h3 { font-size: 14px; font-weight: 600; color: #333; }
+  .drop-card p { font-size: 12px; color: #888; margin-top: 4px; }
+  .drop-card .badge-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; justify-content: center; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: #e8eeff; color: #3a5bd9; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+  .badge .remove { cursor: pointer; color: #999; font-size: 14px; line-height: 1; }
+  .badge .remove:hover { color: #e24b4a; }
+
+  .actions { padding: 0 2rem 1.5rem; display: flex; gap: 10px; align-items: center; }
+  .btn-primary { background: #1a1a2e; color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+  .btn-primary:hover { background: #2d2d4e; }
+  .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+  .btn-secondary { background: #fff; color: #333; border: 1.5px solid #d0cfc8; padding: 9px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; transition: border-color 0.2s; }
+  .btn-secondary:hover { border-color: #999; }
+
+  .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 2rem 1.5rem; }
+  .stat-card { background: #fff; border-radius: 10px; padding: 12px 16px; border: 1px solid #e8e8e4; }
+  .stat-card .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .stat-card .value { font-size: 22px; font-weight: 700; }
+  .stat-card.found .value { color: #0f6e56; }
+  .stat-card.notfound .value { color: #d85a30; }
+  .stat-card.total .value { color: #1a1a2e; }
+  .stat-card.pdfs .value { color: #4a6cf7; }
+
+  .results { padding: 0 2rem 2rem; }
+  .results h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #333; }
+
+  .filter-bar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+  .filter-bar input { padding: 7px 12px; border: 1.5px solid #d0cfc8; border-radius: 8px; font-size: 13px; min-width: 220px; }
+  .filter-bar select { padding: 7px 12px; border: 1.5px solid #d0cfc8; border-radius: 8px; font-size: 13px; background: #fff; }
+  .filter-bar label { font-size: 13px; color: #555; display: flex; align-items: center; gap: 6px; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; border: 1px solid #e8e8e4; font-size: 13px; }
+  thead { background: #f5f5f0; }
+  th { padding: 10px 12px; text-align: left; font-weight: 600; color: #555; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+  td { padding: 9px 12px; border-top: 1px solid #f0f0ec; vertical-align: middle; }
+  tr:hover td { background: #fafaf8; }
+
+  .status-pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .pill-found { background: #e1f5ee; color: #0f6e56; }
+  .pill-notfound { background: #faece7; color: #993c1d; }
+  .pill-pedido { background: #e6f1fb; color: #185fa5; font-size: 11px; }
+  .pill-carga { background: #eaf3de; color: #3b6d11; font-size: 11px; }
+
+  .cod-chip { display: inline-block; background: #f5f5f0; color: #555; font-size: 11px; padding: 2px 7px; border-radius: 4px; font-family: monospace; }
+
+  .empty-state { text-align: center; padding: 3rem; color: #aaa; }
+  .empty-state .big { font-size: 2.5rem; margin-bottom: 8px; }
+
+  .source-tag { font-size: 11px; color: #888; background: #f5f5f0; border-radius: 4px; padding: 2px 6px; }
+
+  .progress { display: none; padding: 0 2rem 1rem; }
+  .progress-bar { height: 4px; background: #e8e8e4; border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #4a6cf7; border-radius: 4px; transition: width 0.3s; }
+  .progress p { font-size: 12px; color: #888; margin-top: 6px; }
+
+  .multi-status { display: flex; flex-direction: column; gap: 3px; }
+
+  @media (max-width: 768px) {
+    .upload-zone { grid-template-columns: 1fr; }
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
+  <h1>Cruzamento Ofertas TV × Pedidos</h1>
+  <span id="timestamp"></span>
+</header>
+
+<div class="upload-zone">
+  <div class="drop-card" id="pdf-zone">
+    <input type="file" id="pdf-input" accept=".pdf" multiple>
+    <div class="icon">📄</div>
+    <h3>PDFs de Ofertas TV</h3>
+    <p>Arraste ou clique para adicionar um ou mais arquivos PDF</p>
+    <div class="badge-list" id="pdf-badges"></div>
+  </div>
+  <div class="drop-card" id="xls-zone">
+    <input type="file" id="xls-input" accept=".xlsx,.xls">
+    <div class="icon">📊</div>
+    <h3>Planilha de Pedidos (XLSX)</h3>
+    <p>Arraste ou clique para adicionar o arquivo de pedidos</p>
+    <div class="badge-list" id="xls-badges"></div>
+  </div>
+</div>
+
+<div class="actions">
+  <button class="btn-primary" id="btn-run" disabled>🔍 Cruzar Dados</button>
+  <button class="btn-secondary" id="btn-clear">Limpar</button>
+  <span id="status-msg" style="font-size:13px; color:#888;"></span>
+</div>
+
+<div class="progress" id="progress-bar">
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  <p id="progress-text">Processando...</p>
+</div>
+
+<div class="stats-bar" id="stats-bar" style="display:none;">
+  <div class="stat-card pdfs"><div class="label">PDFs Carregados</div><div class="value" id="s-pdfs">0</div></div>
+  <div class="stat-card total"><div class="label">Itens nos PDFs</div><div class="value" id="s-total">0</div></div>
+  <div class="stat-card found"><div class="label">Com Pedido</div><div class="value" id="s-found">0</div></div>
+  <div class="stat-card notfound"><div class="label">Sem Pedido</div><div class="value" id="s-notfound">0</div></div>
+</div>
+
+<div class="results" id="results" style="display:none;">
+  <h2>Resultado do Cruzamento</h2>
+  <div class="filter-bar">
+    <input type="text" id="search" placeholder="Buscar por código, descrição ou loja...">
+    <select id="filter-status">
+      <option value="">Todos os status</option>
+      <option value="found">Com Pedido</option>
+      <option value="notfound">Sem Pedido</option>
+    </select>
+    <select id="filter-pdf">
+      <option value="">Todos os PDFs</option>
+    </select>
+    <button class="btn-secondary" id="btn-export" style="margin-left:auto;">⬇ Exportar CSV</button>
+  </div>
+  <table id="result-table">
+    <thead>
+      <tr>
+        <th>Código(s)</th>
+        <th>Descrição (PDF)</th>
+        <th>Loja</th>
+        <th>Fonte PDF</th>
+        <th>Status Pedido</th>
+        <th>Status Carga</th>
+        <th>Qtd Pedidos</th>
+        <th>Situação</th>
+      </tr>
+    </thead>
+    <tbody id="result-body"></tbody>
+  </table>
+  <p style="font-size:12px; color:#aaa; margin-top:10px;" id="row-count"></p>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let pdfFiles = [];
+let xlsFile = null;
+let allRows = [];
+
+document.getElementById('timestamp').textContent = new Date().toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+
+function setupDrop(zone, input, isMulti) {
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    handleFiles(Array.from(e.dataTransfer.files), isMulti);
+  });
+  input.addEventListener('change', e => handleFiles(Array.from(e.target.files), isMulti));
+}
+
+function handleFiles(files, isMulti) {
+  if (isMulti) {
+    files.filter(f => f.name.endsWith('.pdf')).forEach(addPdf);
+  } else {
+    const f = files.find(f => f.name.match(/\.xlsx?$/i));
+    if (f) { xlsFile = f; renderXlsBadge(); }
+  }
+  checkReady();
+}
+
+function addPdf(f) {
+  if (!pdfFiles.find(p => p.name === f.name)) pdfFiles.push(f);
+  renderPdfBadges();
+}
+
+function renderPdfBadges() {
+  const c = document.getElementById('pdf-badges');
+  c.innerHTML = pdfFiles.map((f, i) => `<span class="badge">📄 ${f.name} <span class="remove" data-i="${i}">×</span></span>`).join('');
+  c.querySelectorAll('.remove').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation(); pdfFiles.splice(+btn.dataset.i, 1); renderPdfBadges(); checkReady();
+  }));
+}
+
+function renderXlsBadge() {
+  document.getElementById('xls-badges').innerHTML = xlsFile
+    ? `<span class="badge">📊 ${xlsFile.name}</span>` : '';
+}
+
+function checkReady() {
+  document.getElementById('btn-run').disabled = !(pdfFiles.length > 0 && xlsFile);
+}
+
+setupDrop(document.getElementById('pdf-zone'), document.getElementById('pdf-input'), true);
+setupDrop(document.getElementById('xls-zone'), document.getElementById('xls-input'), false);
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  pdfFiles = []; xlsFile = null; allRows = [];
+  renderPdfBadges(); renderXlsBadge(); checkReady();
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('stats-bar').style.display = 'none';
+  document.getElementById('status-msg').textContent = '';
+  document.getElementById('pdf-input').value = '';
+  document.getElementById('xls-input').value = '';
+});
+
+async function extractPdfItems(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const items = [];
+  const filename = file.name;
+
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const lines = [];
+    let lastY = null;
+    let lineText = '';
+    
+    content.items.forEach(item => {
+      const y = Math.round(item.transform[5]);
+      if (lastY !== null && Math.abs(y - lastY) > 3) {
+        if (lineText.trim()) lines.push(lineText.trim());
+        lineText = '';
+      }
+      lineText += item.str + ' ';
+      lastY = y;
+    });
+    if (lineText.trim()) lines.push(lineText.trim());
+
+    let currentLojas = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      
+      const lojaMatch = line.match(/Lojas?\s+([\d\s\-–]+)/i);
+      if (lojaMatch) {
+        currentLojas = lojaMatch[1].split(/[\s\-–]+/).map(s => s.trim()).filter(s => /^\d+$/.test(s));
+      }
+
+      const codeMatch = line.match(/^([\d\s\-–]+)$/);
+      if (codeMatch) {
+        const codes = line.split(/[\s\-–]+/).map(s => s.trim()).filter(s => /^\d{3,}$/.test(s));
+        if (codes.length > 0) {
+          let descLine = lines[i + 1] ? lines[i + 1].trim() : '';
+          if (/^[\d\s\-–]+$/.test(descLine)) descLine = '';
+          
+          if (descLine && !/Código|Descrição|Lojas?|Limite|Stok|Zaffari|Oferta/i.test(descLine)) {
+            codes.forEach(code => {
+              items.push({
+                codes,
+                codesDisplay: codes.join(' / '),
+                desc: descLine,
+                lojas: currentLojas,
+                source: filename,
+                page: p
+              });
+            });
+            i += 2;
+            continue;
+          }
+        }
+      }
+
+      const inlineMatch = line.match(/^([\d\s\-–]+)\s{2,}(.+)/);
+      if (inlineMatch) {
+        const codes = inlineMatch[1].split(/[\s\-–]+/).map(s => s.trim()).filter(s => /^\d{3,}$/.test(s));
+        const desc = inlineMatch[2].trim();
+        if (codes.length > 0 && desc && !/Código|Descrição|Lojas?|Limite/i.test(desc)) {
+          codes.forEach(code => {
+            items.push({ codes, codesDisplay: codes.join(' / '), desc, lojas: currentLojas, source: filename, page: p });
+          });
+        }
+      }
+      i++;
+    }
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  for (const item of items) {
+    const key = item.codesDisplay + '|' + item.desc + '|' + item.source + '|' + item.lojas.join(',');
+    if (!seen.has(key)) { seen.add(key); deduped.push(item); }
+  }
+  return deduped;
+}
+
+function parseXls(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        resolve(data);
+      } catch (err) { reject(err); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function setProgress(pct, text) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-text').textContent = text;
+}
+
+document.getElementById('btn-run').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true;
+  document.getElementById('progress-bar').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('stats-bar').style.display = 'none';
+  setProgress(5, 'Lendo planilha de pedidos...');
+
+  try {
+    const xlsData = await parseXls(xlsFile);
+    setProgress(20, 'Planilha lida. Extraindo itens dos PDFs...');
+
+    const pedidoMap = {};
+    xlsData.forEach(row => {
+      const cod = String(row['Seqproduto'] || '').trim();
+      const loja = String(row['Nroempdestino'] || '').trim().replace('.0', '');
+      if (!cod) return;
+      const key = cod + '|' + loja;
+      if (!pedidoMap[key]) pedidoMap[key] = [];
+      pedidoMap[key].push(row);
+    });
+
+    const pdfItems = [];
+    for (let fi = 0; fi < pdfFiles.length; fi++) {
+      setProgress(20 + Math.round(60 * fi / pdfFiles.length), `Lendo PDF ${fi + 1} de ${pdfFiles.length}: ${pdfFiles[fi].name}`);
+      const items = await extractPdfItems(pdfFiles[fi]);
+      pdfItems.push(...items);
+    }
+    setProgress(85, 'Cruzando dados...');
+
+    allRows = [];
+    for (const item of pdfItems) {
+      const lojas = item.lojas.length > 0 ? item.lojas : ['?'];
+      for (const loja of lojas) {
+        let matchedPedidos = [];
+        for (const code of item.codes) {
+          const key = code + '|' + loja;
+          if (pedidoMap[key]) matchedPedidos.push(...pedidoMap[key]);
+        }
+        const uniquePedidos = [...new Map(matchedPedidos.map(p => [p['Nropedvenda'], p])).values()];
+        const found = uniquePedidos.length > 0;
+        
+        const statusPedido = found ? [...new Set(uniquePedidos.map(p => p['Status Pedido']).filter(Boolean))] : [];
+        const statusCarga = found ? [...new Set(uniquePedidos.map(p => p['Status Carga']).filter(Boolean))] : [];
+
+        allRows.push({
+          codes: item.codesDisplay,
+          desc: item.desc,
+          loja,
+          source: item.source,
+          found,
+          statusPedido,
+          statusCarga,
+          qtdPedidos: uniquePedidos.length,
+          pedidos: uniquePedidos
+        });
+      }
+    }
+
+    setProgress(100, 'Concluído!');
+
+    const found = allRows.filter(r => r.found).length;
+    const notfound = allRows.filter(r => !r.found).length;
+    document.getElementById('s-pdfs').textContent = pdfFiles.length;
+    document.getElementById('s-total').textContent = allRows.length;
+    document.getElementById('s-found').textContent = found;
+    document.getElementById('s-notfound').textContent = notfound;
+    document.getElementById('stats-bar').style.display = 'grid';
+
+    const filterPdf = document.getElementById('filter-pdf');
+    filterPdf.innerHTML = '<option value="">Todos os PDFs</option>' +
+      pdfFiles.map(f => `<option value="${f.name}">${f.name}</option>`).join('');
+
+    renderTable(allRows);
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('progress-bar').style.display = 'none';
+    document.getElementById('status-msg').textContent = `✅ ${allRows.length} linhas processadas`;
+
+  } catch (err) {
+    setProgress(0, 'Erro: ' + err.message);
+    console.error(err);
+  }
+  btn.disabled = false;
+});
+
+function renderTable(rows) {
+  const tbody = document.getElementById('result-body');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="big">🔍</div><p>Nenhum resultado encontrado</p></div></td></tr>`;
+    document.getElementById('row-count').textContent = '';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><span class="cod-chip">${escHtml(r.codes)}</span></td>
+      <td style="max-width:220px;">${escHtml(r.desc)}</td>
+      <td><strong>${escHtml(r.loja)}</strong></td>
+      <td><span class="source-tag">${escHtml(r.source.replace(/\.pdf$/i,''))}</span></td>
+      <td>${r.statusPedido.length ? r.statusPedido.map(s => `<span class="status-pill pill-pedido">${escHtml(s)}</span>`).join('<br>') : '<span style="color:#ccc">—</span>'}</td>
+      <td>${r.statusCarga.length ? r.statusCarga.map(s => `<span class="status-pill pill-carga">${escHtml(s)}</span>`).join('<br>') : '<span style="color:#ccc">—</span>'}</td>
+      <td style="text-align:center;">${r.found ? r.qtdPedidos : '<span style="color:#ccc">0</span>'}</td>
+      <td><span class="status-pill ${r.found ? 'pill-found' : 'pill-notfound'}">${r.found ? '✓ Com Pedido' : '✗ Sem Pedido'}</span></td>
+    </tr>
+  `).join('');
+  document.getElementById('row-count').textContent = `Exibindo ${rows.length} linha${rows.length !== 1 ? 's' : ''}`;
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getFiltered() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const st = document.getElementById('filter-status').value;
+  const src = document.getElementById('filter-pdf').value;
+  return allRows.filter(r => {
+    if (q && !r.codes.toLowerCase().includes(q) && !r.desc.toLowerCase().includes(q) && !r.loja.toLowerCase().includes(q)) return false;
+    if (st === 'found' && !r.found) return false;
+    if (st === 'notfound' && r.found) return false;
+    if (src && r.source !== src) return false;
+    return true;
+  });
+}
+
+['search','filter-status','filter-pdf'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => renderTable(getFiltered()));
+  document.getElementById(id).addEventListener('change', () => renderTable(getFiltered()));
+});
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const rows = getFiltered();
+  const csv = [
+    ['Códigos','Descrição','Loja','Fonte PDF','Status Pedido','Status Carga','Qtd Pedidos','Situação'],
+    ...rows.map(r => [
+      r.codes, r.desc, r.loja, r.source,
+      r.statusPedido.join('; '), r.statusCarga.join('; '),
+      r.qtdPedidos, r.found ? 'Com Pedido' : 'Sem Pedido'
+    ])
+  ].map(row => row.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+  a.download = 'cruzamento_ofertas_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+});
+</script>
+</body>
+</html>
